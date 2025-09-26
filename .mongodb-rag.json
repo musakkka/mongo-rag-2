@@ -1,0 +1,23 @@
+{
+  "mongoUrl": "mongodb+srv://fabulousmochama_db_user:u4sqs9hXyh6lSRGU@cluster0.ffcv4pj.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
+  "database": "mongodb-rag",
+  "collection": "documents",
+  "provider": "openai",
+  "apiKey": "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",
+  "baseUrl": "http://localhost:11434",
+  "model": "text-embedding-3-large",
+  "dimensions": 4096,
+  "embedding": {
+    "provider": "openai",
+    "model": "text-embedding-3-large",
+    "dimensions": 4096,
+    "apiKey": "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",
+    "baseUrl": "http://localhost:11434",
+    "batchSize": 100
+  },
+  "search": {
+    "maxResults": 5,
+    "minScore": 0.7
+  },
+  "indexName": "vector_index"
+}
