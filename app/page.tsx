@@ -7,6 +7,12 @@ interface Message {
   type: 'user' | 'bot';
   content: string;
   timestamp: Date;
+  sources?: Array<{
+    title: string;
+    content: string;
+    score: number;
+  }>;
+  usage?: any;
 }
 
 export default function Home() {
@@ -22,6 +28,7 @@ export default function Home() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isRAGMode, setIsRAGMode] = useState(false);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const chatBodyRef = useRef<HTMLDivElement>(null);
 
@@ -78,15 +85,22 @@ export default function Home() {
     setIsTyping(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const endpoint = isRAGMode ? '/api/rag' : '/api/chat';
+      const requestBody = isRAGMode 
+        ? {
+            question: currentInput
+          }
+        : {
+            message: currentInput,
+            conversationHistory: messages
+          };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: currentInput,
-          conversationHistory: messages
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -98,8 +112,10 @@ export default function Home() {
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: data.response,
-        timestamp: new Date()
+        content: isRAGMode ? data.answer : data.response,
+        timestamp: new Date(),
+        sources: data.sources,
+        usage: data.usage
       };
       
       setMessages(prev => [...prev, botMessage]);
@@ -157,14 +173,29 @@ export default function Home() {
           <div className="header-info">
             <ChatbotLogo />
             <h2 className="logo-text">Chatbot</h2>
+            <div className="mode-indicator">
+              <span className={`mode-badge ${isRAGMode ? 'rag-mode' : 'chat-mode'}`}>
+                {isRAGMode ? 'RAG' : 'Chat'}
+              </span>
+            </div>
           </div>
-          <button 
-            id="close-chatbot"
-            className="material-symbols-rounded"
-            onClick={() => setIsOpen(false)}
-          >
-            keyboard_arrow_down
-          </button>
+          <div className="header-controls">
+            <button 
+              id="mode-toggle"
+              className={`mode-toggle ${isRAGMode ? 'rag-active' : 'chat-active'}`}
+              onClick={() => setIsRAGMode(!isRAGMode)}
+              title={`Switch to ${isRAGMode ? 'Chat' : 'RAG'} mode`}
+            >
+              {isRAGMode ? '💬' : '🔍'}
+            </button>
+            <button 
+              id="close-chatbot"
+              className="material-symbols-rounded"
+              onClick={() => setIsOpen(false)}
+            >
+              keyboard_arrow_down
+            </button>
+          </div>
         </div>
 
         {/* Chat Body */}
@@ -172,13 +203,45 @@ export default function Home() {
           {messages.map((message) => (
             <div key={message.id} className={`message ${message.type}-message`}>
               {message.type === 'bot' && <BotAvatar />}
-              <div className="message-text">
-                {message.content.split('\n').map((line, index) => (
-                  <span key={index}>
-                    {line}
-                    {index < message.content.split('\n').length - 1 && <br />}
-                  </span>
-                ))}
+              <div className="message-content">
+                <div className="message-text">
+                   {message.content.split('\n').map((line, index) => {
+                    // Handle bullet points
+                    if (line.trim().startsWith('- ')) {
+                      const bulletLine = line.replace('- ', '• ');
+                      // Handle bold text within bullet points
+                      const formattedLine = bulletLine.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                      return (
+                        <div key={index} className="bullet-point" dangerouslySetInnerHTML={{ __html: formattedLine }} />
+                      );
+                    }
+                    // Handle bold text
+                    const boldLine = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    return (
+                      <div key={index} dangerouslySetInnerHTML={{ __html: boldLine }} />
+                    );
+                  })}
+                </div>
+                {message.sources && message.sources.length > 0 && (
+                  <div className="sources-section">
+                    <div className="sources-header">
+                      <span className="sources-label">📚 Sources:</span>
+                    </div>
+                    <div className="sources-list">
+                      {message.sources.map((source, index) => (
+                        <div key={index} className="source-item">
+                          <div className="source-title">{source.title}</div>
+                          <div className="source-content">
+                            {source.content.length > 100 
+                              ? `${source.content.substring(0, 100)}...` 
+                              : source.content
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -186,8 +249,10 @@ export default function Home() {
           {isTyping && (
             <div className="message bot-message thinking">
               <BotAvatar />
-              <div className="message-text">
-                <ThinkingIndicator />
+              <div className="message-content">
+                <div className="message-text">
+                  <ThinkingIndicator />
+                </div>
               </div>
             </div>
           )}
